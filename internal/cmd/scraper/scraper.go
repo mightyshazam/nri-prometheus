@@ -47,6 +47,7 @@ type Config struct {
 	EmitterProxyURL           *url.URL
 	EmitterCAFile             string `mapstructure:"emitter_ca_file"`
 	EmitterInsecureSkipVerify bool   `mapstructure:"emitter_insecure_skip_verify" default:"false"`
+	UsePrometheusOperator     bool   `mapstructure:"use_prometheus_operator" default:"false"`
 }
 
 const maskedLicenseKey = "****"
@@ -128,7 +129,7 @@ func RunWithEmitters(cfg *Config, emitters []integration.Emitter) error {
 	}
 	retrievers = append(retrievers, fixedRetriever)
 
-	kubernetesRetriever, err := endpoints.NewKubernetesTargetRetriever(cfg.ScrapeEnabledLabel, cfg.RequireScrapeEnabledLabelForNodes, endpoints.WithInClusterConfig())
+	kubernetesRetriever, err := endpoints.NewKubernetesTargetRetriever(cfg.ScrapeEnabledLabel, cfg.RequireScrapeEnabledLabelForNodes, cfg.UsePrometheusOperator, endpoints.WithInClusterConfig())
 	if err != nil {
 		logrus.WithError(err).Errorf("not possible to get a Kubernetes client. If you aren't running this integration in a Kubernetes cluster, you can ignore this error")
 	} else {

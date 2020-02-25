@@ -15,7 +15,7 @@ import (
 )
 
 var kubeConfigFile = flag.String("kubeconfig", "", "location of the kube config file. Defaults to ~/.kube/config")
-
+var usePrometheusOperator = flag.Bool("usePrometheusOperator", false, "use prometheus operator servicemonitors and podmonitors: true or false")
 func init() {
 	flag.Usage = func() {
 		fmt.Printf("Usage of %s:\n", os.Args[0])
@@ -33,7 +33,7 @@ func main() {
 	}
 
 	kubeconf := endpoints.WithKubeConfig(*kubeConfigFile)
-	ktr, err := endpoints.NewKubernetesTargetRetriever("prometheus.io/scrape", false, kubeconf)
+	ktr, err := endpoints.NewKubernetesTargetRetriever("prometheus.io/scrape", false, *usePrometheusOperator, kubeconf)
 	if err != nil {
 		logrus.Fatalf("could not create KubernetesTargetRetriever: %v", err)
 	}

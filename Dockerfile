@@ -5,8 +5,7 @@ WORKDIR /go/src/github.com/newrelic/nri-prometheus
 COPY Makefile Makefile
 RUN make tools
 # Trick for reusing the cache in case vendor.json doesn't change.
-COPY vendor vendor
-RUN make deps
+COPY go.mod go.sum ./
 COPY . .
 RUN make compile-only
 RUN chmod +x bin/nri-prometheus

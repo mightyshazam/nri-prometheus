@@ -55,6 +55,7 @@ func setViperDefaults(viper *viper.Viper) {
 	viper.SetDefault("auto_decorate", false)
 	viper.SetDefault("insecure_skip_verify", false)
 	viper.SetDefault("percentiles", []float64{50.0, 95.0, 99.0})
+	viper.SetDefault("use_prometheus_operator", false)
 }
 
 // bindViperEnv automatically binds the variables in given configuration struct to environment variables.
