@@ -40,6 +40,21 @@ type operatorTargetCollection struct {
 	update  chan operatorEvent
 }
 
+type urlBuilder func(host string) url.URL
+
+func defaultUrlBuilder(scheme, port, path string) urlBuilder {
+	return func(host string) url.URL {
+		if scheme == "" {
+			scheme = "http"
+		}
+
+		return url.URL{
+			Scheme: scheme,
+			Host:   net.JoinHostPort(host, port),
+			Path:   path,
+		}
+	}
+}
 func withInClusterConfig(client kubernetes.Interface) (*operatorTargetRetriever, error) {
 	cfg, _ := rest.InClusterConfig()
 	mclient, err := monitoringclient.NewForConfig(cfg)
@@ -102,9 +117,7 @@ func mapPorts(containers []apiv1.Container) map[string]string {
 	ports := map[string]string{}
 	for _, c := range containers {
 		for _, port := range c.Ports {
-			if _, ok := ports[port.Name]; ok {
-				ports[port.Name] = strconv.Itoa(int(port.ContainerPort))
-			}
+			ports[port.Name] = strconv.Itoa(int(port.ContainerPort))
 		}
 	}
 
@@ -161,14 +174,14 @@ func createServiceMonitorTargets(m *monitoringv1.ServiceMonitor, svc *apiv1.Serv
 		if p, ok := ports[ep.Port]; ok {
 			targets[i] = serviceTarget(svc, p, path)
 		} else {
-			targets[i] = serviceTarget(svc, "8080", path)
+			targets[i] = serviceTarget(svc, strconv.Itoa(int(svc.Spec.Ports[0].Port)), path)
 		}
 	}
 
 	return targets
 }
 
-func endpointSubsetTarget(ep *apiv1.Endpoints, subset *apiv1.EndpointSubset, port, path string) []Target {
+func endpointSubsetTarget(ep *apiv1.Endpoints, subset *apiv1.EndpointSubset, builder urlBuilder) []Target {
 	targets := make([]Target, 0)
 	for _, address := range subset.Addresses {
 		lbls := labels.Set{}
@@ -184,16 +197,13 @@ func endpointSubsetTarget(ep *apiv1.Endpoints, subset *apiv1.EndpointSubset, por
 			hostname = fmt.Sprintf("%s", address.IP)
 		}
 
-		addr := url.URL{
-			Scheme: "http",
-			Host:   net.JoinHostPort(hostname, port),
-			Path:   path,
-		}
-
+		addr := builder(hostname)
 		if address.TargetRef != nil {
 			if address.TargetRef.Kind == "Pod" {
 				lbls["podName"] = address.TargetRef.Name
-				lbls["nodeName"] = address.NodeName
+				if address.NodeName != nil {
+					lbls["nodeName"] = *address.NodeName
+				}
 			}
 
 			targets = append(targets, New(address.TargetRef.Name, addr, Object{Name: ep.Name, Kind: address.TargetRef.Kind, Labels: lbls}))
@@ -214,12 +224,17 @@ func createServiceMonitorEndpointTargets(m *monitoringv1.ServiceMonitor, endpoin
 			path = ep.Path
 		}
 		for _, subset := range endpoint.Subsets {
-			ports := mapSubsetPorts(&subset)
-			if p, ok := ports[ep.Port]; ok {
-				targets = append(targets, endpointSubsetTarget(endpoint, &subset, p, path)...)
-			} else {
-				targets = append(targets, endpointSubsetTarget(endpoint, &subset, "8080", path)...)
+			if len(subset.Ports) == 0 {
+				continue
 			}
+
+			ports := mapSubsetPorts(&subset)
+			p, ok := ports[ep.Port]
+			if ok {
+				p = strconv.Itoa(int(subset.Ports[0].Port))
+			}
+
+			targets = append(targets, endpointSubsetTarget(endpoint, &subset, defaultUrlBuilder(ep.Scheme, p, path))...)
 		}
 	}
 
